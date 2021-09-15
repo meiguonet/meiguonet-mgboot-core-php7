@@ -1,0 +1,24 @@
+{
+  "name": "meiguonet/meiguonet-mgboot-core-php7",
+  "description": "a lightweight api framework like spring boot for php 7.2.0 or above",
+  "keywords": [],
+  "license": "MIT",
+  "authors": [
+    {
+      "name": "Simon.Ye",
+      "email": "samlinye@163.com"
+    }
+  ],
+  "autoload": {
+    "psr-4": {
+      "mgboot\\": "src/"
+    }
+  },
+  "require": {
+    "php": ">=7.2.0",
+    "psr/log": "^1.1.4",
+    "meiguonet/meiguonet-mgboot-common": "^1.0.2",
+    "nikic/fast-route": "^1.3.0",
+    "guzzlehttp/guzzle": "^6.5.5"
+  }
+}
