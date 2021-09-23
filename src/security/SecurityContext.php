@@ -64,7 +64,7 @@ final class SecurityContext
             if ($idx >= 0) {
                 self::$jwtSettings[$idx] = $settings;
             } else {
-                self::$corsSettings[] = $settings;
+                self::$jwtSettings[] = $settings;
             }
 
             return;
@@ -72,9 +72,9 @@ final class SecurityContext
 
         if (is_array($settings) && !empty($settings) && ArrayUtils::isAssocArray($settings)) {
             if ($idx >= 0) {
-                self::$jwtSettings[$idx] = CorsSettings::create($settings);
+                self::$jwtSettings[$idx] = JwtSettings::create($key, $settings);
             } else {
-                self::$corsSettings[] = CorsSettings::create($settings);
+                self::$jwtSettings[] = JwtSettings::create($key, $settings);
             }
         }
     }
