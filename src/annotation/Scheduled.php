@@ -17,17 +17,30 @@ class Scheduled
      */
     private $value;
 
+    /**
+     * @var bool
+     */
+    private $disabled;
+
     public function __construct($arg0)
     {
         $value = '';
+        $disabled = false;
 
         if (is_string($arg0)) {
             $value = $arg0;
-        } else if (is_array($arg0) && is_string($arg0['value'])) {
-            $value = $arg0['value'];
+        } else if (is_array($arg0)) {
+            if (is_string($arg0['value'])) {
+                $value = $arg0['value'];
+            }
+
+            if (is_bool($arg0['disabled'])) {
+                $disabled = $arg0['disabled'];
+            }
         }
 
         $this->value = $value;
+        $this->disabled = $disabled;
     }
 
     /**
@@ -88,5 +101,13 @@ class Scheduled
         }
 
         return implode(' ', $parts);
+    }
+
+    /**
+     * @return bool
+     */
+    public function isDisabled(): bool
+    {
+        return $this->disabled;
     }
 }
