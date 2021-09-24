@@ -27,7 +27,7 @@ final class TaskServer
     /**
      * @var string
      */
-    private static $cronTaskSourceDir = 'classpath:cron';
+    private static $cronTaskSourceDir = 'classpath:app/cron';
 
     /**
      * @var array
