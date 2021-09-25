@@ -10,6 +10,7 @@ use mgboot\http\middleware\JwtAuthMiddleware;
 use mgboot\http\middleware\Middleware;
 use mgboot\http\middleware\RequestLogMiddleware;
 use mgboot\logging\LogContext;
+use mgboot\MgBoot;
 use mgboot\mvc\HandlerFuncArgsInjector;
 use mgboot\mvc\RoutingContext;
 use Throwable;
@@ -60,11 +61,14 @@ final class RequestHandler
 
             list($clazz, $methodName) = explode('@', $routeRule->getHandler());
             $clazz = StringUtils::ensureLeft($clazz, "\\");
+            $bean = MgBoot::getControllerBean($clazz);
 
-            try {
-                $bean = new $clazz();
-            } catch (Throwable $ex) {
-                $bean = null;
+            if (!is_object($bean)) {
+                try {
+                    $bean = new $clazz();
+                } catch (Throwable $ex) {
+                    $bean = null;
+                }
             }
 
             if (!is_object($bean)) {

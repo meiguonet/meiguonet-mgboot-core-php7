@@ -2,13 +2,11 @@
 
 namespace mgboot\annotation;
 
-use Doctrine\Common\Annotations\Annotation\Target;
 use mgboot\common\Cast;
 use mgboot\common\constant\RequestParamSecurityMode as SecurityMode;
 
 /**
  * @Annotation
- * @Target("ANNOTATION")
  */
 final class RequestParam
 {

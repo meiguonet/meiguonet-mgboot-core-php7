@@ -3,6 +3,10 @@
 namespace mgboot;
 
 use FastRoute\Dispatcher;
+use FastRoute\RouteCollector;
+use mgboot\common\AppConf;
+use mgboot\common\swoole\Swoole;
+use mgboot\common\util\FileUtils;
 use mgboot\common\util\StringUtils;
 use mgboot\exception\AccessTokenExpiredException;
 use mgboot\exception\AccessTokenInvalidException;
@@ -16,19 +20,15 @@ use mgboot\http\server\Request;
 use mgboot\http\server\RequestHandler;
 use mgboot\http\server\Response;
 use mgboot\http\server\response\JsonResponse;
-use mgboot\mvc\MvcContext;
 use mgboot\mvc\RouteRule;
 use mgboot\security\CorsSettings;
 use mgboot\security\SecurityContext;
 use Throwable;
+use function FastRoute\cachedDispatcher;
+use function FastRoute\simpleDispatcher;
 
 final class MgBoot
 {
-    /**
-     * @var string
-     */
-    private static $controllerDir = '';
-
     /**
      * @var bool
      */
@@ -44,11 +44,16 @@ final class MgBoot
      */
     private static $middlewares = [];
 
+    /**
+     * @var array
+     */
+    private static $controllerMap = [];
+
     private function __construct()
     {
     }
 
-    public static function handleRequest(Request $request, Response $response): void
+    public static function handleRequest(Request $request, Response $response, array $routeRules): void
     {
         $response->withExceptionHandlers(self::$exceptionHandlers);
         $corsSettings = SecurityContext::getCorsSettings();
@@ -62,7 +67,7 @@ final class MgBoot
             return;
         }
 
-        $dispatcher = MvcContext::getRouteDispatcher();
+        $dispatcher = self::buildRouteDispatcher($routeRules);
 
         if (!($dispatcher instanceof Dispatcher)) {
             $response->withPayload(HttpError::create(400))->send();
@@ -94,7 +99,7 @@ final class MgBoot
                         return;
                     }
 
-                    if (!self::setRouteRuleToRequest($request, $httpMethod, $handlerFunc)) {
+                    if (!self::setRouteRuleToRequest($request, $httpMethod, $handlerFunc, $routeRules)) {
                         $response->withPayload(HttpError::create(400))->send();
                         return;
                     }
@@ -114,18 +119,83 @@ final class MgBoot
         }
     }
 
-    public static function scanControllersIn(string $dir): void
+    private static function buildRouteDispatcher(array $routeRules): ?Dispatcher
     {
-        if ($dir === '' || !is_dir($dir)) {
-            return;
+        if (empty($routeRules)) {
+            return null;
         }
 
-        self::$controllerDir = $dir;
-    }
+        $cacheEnabled = true;
+        $cacheDir = FileUtils::getRealpath('classpath:cache');
 
-    public static function getControllerDir(): string
-    {
-        return self::$controllerDir;
+        if ($cacheDir !== '') {
+            $cacheDir = rtrim(str_replace("\\", '/', $cacheDir), '/');
+        }
+
+        if (AppConf::getEnv() === 'dev') {
+            $cacheEnabled = false;
+        } else if ($cacheDir === '' || !is_dir($cacheDir) || !is_writable($cacheDir)) {
+            $cacheEnabled = false;
+        }
+
+        if (!$cacheEnabled) {
+            simpleDispatcher(function (RouteCollector $r) use ($routeRules) {
+                /* @var RouteRule $rule */
+                foreach ($routeRules as $rule) {
+                    switch ($rule->getHttpMethod()) {
+                        case 'GET':
+                            $r->get($rule->getRequestMapping(), $rule->getHandler());
+                            break;
+                        case 'POST':
+                            $r->post($rule->getRequestMapping(), $rule->getHandler());
+                            break;
+                        case 'PUT':
+                            $r->put($rule->getRequestMapping(), $rule->getHandler());
+                            break;
+                        case 'PATCH':
+                            $r->patch($rule->getRequestMapping(), $rule->getHandler());
+                            break;
+                        case 'DELETE':
+                            $r->delete($rule->getRequestMapping(), $rule->getHandler());
+                            break;
+                        default:
+                            $r->get($rule->getRequestMapping(), $rule->getHandler());
+                            $r->post($rule->getRequestMapping(), $rule->getHandler());
+                            break;
+                    }
+                }
+            });
+        }
+
+        $suffix = Swoole::buildGlobalVarKey();
+        $cacheFile = "$cacheDir/fastroute-$suffix.dat";
+
+        return cachedDispatcher(function (RouteCollector $r) use ($routeRules) {
+            /* @var RouteRule $rule */
+            foreach ($routeRules as $rule) {
+                switch ($rule->getHttpMethod()) {
+                    case 'GET':
+                        $r->get($rule->getRequestMapping(), $rule->getHandler());
+                        break;
+                    case 'POST':
+                        $r->post($rule->getRequestMapping(), $rule->getHandler());
+                        break;
+                    case 'PUT':
+                        $r->put($rule->getRequestMapping(), $rule->getHandler());
+                        break;
+                    case 'PATCH':
+                        $r->patch($rule->getRequestMapping(), $rule->getHandler());
+                        break;
+                    case 'DELETE':
+                        $r->delete($rule->getRequestMapping(), $rule->getHandler());
+                        break;
+                    default:
+                        $r->get($rule->getRequestMapping(), $rule->getHandler());
+                        $r->post($rule->getRequestMapping(), $rule->getHandler());
+                        break;
+                }
+            }
+        }, compact('cacheFile'));
     }
 
     public static function gzipOutputEnabled(?bool $flag = null): bool
@@ -166,6 +236,60 @@ final class MgBoot
         self::$middlewares[] = $middleware;
     }
 
+    public static function buildControllerMap(array $routeRules): void
+    {
+        $server = Swoole::getServer();
+
+        if (!is_object($server)) {
+            return;
+        }
+
+        $key = 'worker' . Swoole::getWorkerId();
+        $map1 = [];
+
+        /* @var RouteRule $rule */
+        foreach ($routeRules as $rule) {
+            list($clazz, $methodName) = explode('@', $rule->getHandler());
+            unset($methodName);
+
+            if (isset($map1[$clazz])) {
+                continue;
+            }
+
+            try {
+                $bean = new $clazz();
+            } catch (Throwable $ex) {
+                $bean = null;
+            }
+
+            if (!is_object($bean)) {
+                continue;
+            }
+
+            $map1[$clazz] = $bean;
+        }
+
+        self::$controllerMap[$key] = $map1;
+    }
+
+    public static function getControllerBean(string $clazz)
+    {
+        $server = Swoole::getServer();
+
+        if (!is_object($server)) {
+            return null;
+        }
+
+        $key = 'worker' . Swoole::getWorkerId();
+
+        if (!is_array(self::$controllerMap[$key])) {
+            return null;
+        }
+
+        $bean = self::$controllerMap[$key][$clazz];
+        return is_object($bean) ? $bean : null;
+    }
+
     private static function checkNecessaryExceptionHandlers(): void
     {
         $classes = [
@@ -204,11 +328,16 @@ final class MgBoot
         return false;
     }
 
-    private static function setRouteRuleToRequest(Request $request, string $httpMethod, string $handlerFunc): bool
+    private static function setRouteRuleToRequest(
+        Request $request,
+        string $httpMethod,
+        string $handlerFunc,
+        array $routeRules
+    ): bool
     {
-        $routeRules = MvcContext::getRouteRules();
         $matched = null;
 
+        /* @var RouteRule $rule */
         foreach ($routeRules as $rule) {
             if ($rule->getHttpMethod() === $httpMethod && $rule->getHandler() === $handlerFunc) {
                 $matched = $rule;
