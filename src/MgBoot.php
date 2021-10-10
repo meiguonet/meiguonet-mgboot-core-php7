@@ -3,6 +3,7 @@
 namespace mgboot;
 
 use mgboot\common\swoole\Swoole;
+use mgboot\common\util\ArrayUtils;
 use mgboot\common\util\StringUtils;
 use mgboot\exception\AccessTokenExpiredException;
 use mgboot\exception\AccessTokenInvalidException;
@@ -208,9 +209,9 @@ final class MgBoot
 
             $pathVariableNames = $rr->getPathVariableNames();
             $matches = [];
-            preg_match($rr->getRegex(), $uri, $matches, PREG_SET_ORDER);
+            preg_match($rr->getRegex(), $uri, $matches);
 
-            if (count($matches) <= count($pathVariableNames)) {
+            if (!ArrayUtils::isStringArray($matches) || count($matches) <= count($pathVariableNames)) {
                 continue;
             }
 
