@@ -22,7 +22,11 @@ final class MapBind
         if (is_string($arg0) && $arg0 !== '') {
             $rules = preg_split(Regexp::COMMA_SEP, $arg0);
         } else if (is_array($arg0)) {
-            if (is_string($arg0['rules']) && $arg0['rules'] !== '') {
+            if (is_string($arg0['value']) && $arg0['value'] !== '') {
+                $rules = preg_split(Regexp::COMMA_SEP, $arg0['value']);
+            } else if (ArrayUtils::isStringArray($arg0['value'])) {
+                $rules = $arg0['value'];
+            } else if (is_string($arg0['rules']) && $arg0['rules'] !== '') {
                 $rules = preg_split(Regexp::COMMA_SEP, $arg0['rules']);
             } else if (ArrayUtils::isStringArray($arg0['rules'])) {
                 $rules = $arg0['rules'];

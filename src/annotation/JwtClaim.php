@@ -18,8 +18,12 @@ final class JwtClaim
 
         if (is_string($arg0)) {
             $name = $arg0;
-        } else if (is_array($arg0) && is_string($arg0['name'])) {
-            $name = $arg0['name'];
+        } else if (is_array($arg0)) {
+            if (is_string($arg0['value'])) {
+                $name = $arg0['value'];
+            } else if (is_string($arg0['name'])) {
+                $name = $arg0['name'];
+            }
         }
 
         $this->name = empty($name) ? '' : $name;
