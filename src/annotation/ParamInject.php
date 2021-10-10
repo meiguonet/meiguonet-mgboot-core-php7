@@ -3,6 +3,7 @@
 namespace mgboot\annotation;
 
 use Doctrine\Common\Annotations\Annotation\Target;
+use mgboot\common\util\ArrayUtils;
 
 /**
  * @Annotation
@@ -15,9 +16,19 @@ final class ParamInject
      */
     private $value;
 
-    public function __construct(array $values)
+    public function __construct($arg0)
     {
-        $this->value = $values;
+        $annos = [];
+
+        if (is_array($arg0)) {
+            if (ArrayUtils::isList($arg0['value'])) {
+                $annos = $arg0['value'];
+            } else if (ArrayUtils::isList($arg0)) {
+                $annos = $arg0;
+            }
+        }
+
+        $this->value = $annos;
     }
 
     /**

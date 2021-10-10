@@ -12,9 +12,17 @@ final class HttpHeader
      */
     private $name;
 
-    public function __construct(string $arg0)
+    public function __construct($arg0)
     {
-        $this->name = $arg0;
+        $name = '';
+
+        if (is_string($arg0) && $arg0 !== '') {
+            $name = $arg0;
+        } else if (is_array($arg0) && is_string($arg0['name'])) {
+            $name = $arg0['name'];
+        }
+
+        $this->name = $name;
     }
 
     /**

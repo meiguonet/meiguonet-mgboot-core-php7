@@ -3,8 +3,8 @@
 namespace mgboot\annotation;
 
 use Doctrine\Common\Annotations\Annotation\Target;
-use mgboot\common\Cast;
 use mgboot\common\constant\Regexp;
+use mgboot\common\util\ArrayUtils;
 
 /**
  * @Annotation
@@ -22,20 +22,22 @@ final class Validate
      */
     private $failfast;
 
-    public function __construct(array $values)
+    public function __construct($arg0)
     {
         $rules = [];
-        $failfast = Cast::toBoolean($values['failfast']);
+        $failfast = false;
 
-        if (is_string($values['rules']) && $values['rules'] !== '') {
-            $rules = preg_split(Regexp::COMMA_SEP, $values['rules']);
-        } else if (is_array($values['rules']) && !empty($values['rules'])) {
-            foreach ($values['rules'] as $s1) {
-                if (!is_string($s1) || $s1 === '') {
-                    continue;
-                }
+        if (is_string($arg0) && $arg0 !== '') {
+            $rules = preg_split(Regexp::COMMA_SEP, $arg0);
+        } else if (is_array($arg0)) {
+            if (is_string($arg0['rules']) && $arg0['rules'] !== '') {
+                $rules = preg_split(Regexp::COMMA_SEP, $arg0['rules']);
+            } else if (ArrayUtils::isStringArray($arg0['rules'])) {
+                $rules = $arg0['rules'];
+            }
 
-                $rules[] = $s1;
+            if (is_bool($arg0['failfast'])) {
+                $failfast = $arg0['failfast'];
             }
         }
 

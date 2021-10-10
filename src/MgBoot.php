@@ -20,6 +20,7 @@ use mgboot\http\server\Request;
 use mgboot\http\server\RequestHandler;
 use mgboot\http\server\Response;
 use mgboot\http\server\response\JsonResponse;
+use mgboot\logging\Log;
 use mgboot\mvc\RouteRule;
 use mgboot\security\CorsSettings;
 use mgboot\security\SecurityContext;
@@ -88,6 +89,11 @@ final class MgBoot
 
             switch ($resultCode) {
                 case Dispatcher::NOT_FOUND:
+                    if (AppConf::getEnv() === 'dev' && !AppConf::getBoolean('logging.disable-mgboot-debug-log')) {
+                        $msg = "$httpMethod $uri, 404 not found";
+                        Log::info($msg);
+                    }
+
                     $response->withPayload(HttpError::create(404))->send();
                     break;
                 case Dispatcher::METHOD_NOT_ALLOWED:
@@ -132,7 +138,7 @@ final class MgBoot
             $cacheDir = rtrim(str_replace("\\", '/', $cacheDir), '/');
         }
 
-        if (AppConf::getEnv() === 'dev') {
+        if (AppConf::getEnv() === 'dev' && !AppConf::getBoolean('app.force-dispatcher-cache')) {
             $cacheEnabled = false;
         } else if ($cacheDir === '' || !is_dir($cacheDir) || !is_writable($cacheDir)) {
             $cacheEnabled = false;
@@ -144,21 +150,51 @@ final class MgBoot
                 foreach ($routeRules as $rule) {
                     switch ($rule->getHttpMethod()) {
                         case 'GET':
+                            if (AppConf::getEnv() === 'dev' && !AppConf::getBoolean('logging.disable-mgboot-debug-log')) {
+                                $msg = "dispatch rule: GET {$rule->getRequestMapping()}, handler: {$rule->getHandler()}";
+                                Log::debug($msg);
+                            }
+
                             $r->get($rule->getRequestMapping(), $rule->getHandler());
                             break;
                         case 'POST':
+                            if (AppConf::getEnv() === 'dev' && !AppConf::getBoolean('logging.disable-mgboot-debug-log')) {
+                                $msg = "dispatch rule: POST {$rule->getRequestMapping()}, handler: {$rule->getHandler()}";
+                                Log::debug($msg);
+                            }
+
                             $r->post($rule->getRequestMapping(), $rule->getHandler());
                             break;
                         case 'PUT':
+                            if (AppConf::getEnv() === 'dev' && !AppConf::getBoolean('logging.disable-mgboot-debug-log')) {
+                                $msg = "dispatch rule: PUT {$rule->getRequestMapping()}, handler: {$rule->getHandler()}";
+                                Log::debug($msg);
+                            }
+
                             $r->put($rule->getRequestMapping(), $rule->getHandler());
                             break;
                         case 'PATCH':
+                            if (AppConf::getEnv() === 'dev' && !AppConf::getBoolean('logging.disable-mgboot-debug-log')) {
+                                $msg = "dispatch rule: PATCH {$rule->getRequestMapping()}, handler: {$rule->getHandler()}";
+                                Log::debug($msg);
+                            }
+
                             $r->patch($rule->getRequestMapping(), $rule->getHandler());
                             break;
                         case 'DELETE':
+                            if (AppConf::getEnv() === 'dev' && !AppConf::getBoolean('logging.disable-mgboot-debug-log')) {
+                                $msg = "dispatch rule: DELETE {$rule->getRequestMapping()}, handler: {$rule->getHandler()}";
+                                Log::debug($msg);
+                            }
+
                             $r->delete($rule->getRequestMapping(), $rule->getHandler());
                             break;
                         default:
+                            if (AppConf::getEnv() === 'dev' && !AppConf::getBoolean('logging.disable-mgboot-debug-log')) {
+                                $msg = "dispatch rule: GET or POST {$rule->getRequestMapping()}, handler: {$rule->getHandler()}";
+                                Log::debug($msg);
+                            }
+
                             $r->get($rule->getRequestMapping(), $rule->getHandler());
                             $r->post($rule->getRequestMapping(), $rule->getHandler());
                             break;

@@ -19,9 +19,9 @@ final class JwtAuth
     {
         $value = '';
 
-        if (is_string($arg0) && $arg0 !== '') {
+        if (is_string($arg0)) {
             $value = $arg0;
-        } else if (is_array($arg0) && is_string($arg0['value']) && $arg0['value'] !== '') {
+        } else if (is_array($arg0) && is_string($arg0['value'])) {
             $value = $arg0['value'];
         }
 
