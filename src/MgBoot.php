@@ -2,11 +2,7 @@
 
 namespace mgboot;
 
-use FastRoute\Dispatcher;
-use FastRoute\RouteCollector;
-use mgboot\common\AppConf;
 use mgboot\common\swoole\Swoole;
-use mgboot\common\util\FileUtils;
 use mgboot\common\util\StringUtils;
 use mgboot\exception\AccessTokenExpiredException;
 use mgboot\exception\AccessTokenInvalidException;
@@ -20,13 +16,10 @@ use mgboot\http\server\Request;
 use mgboot\http\server\RequestHandler;
 use mgboot\http\server\Response;
 use mgboot\http\server\response\JsonResponse;
-use mgboot\logging\Log;
 use mgboot\mvc\RouteRule;
 use mgboot\security\CorsSettings;
 use mgboot\security\SecurityContext;
 use Throwable;
-use function FastRoute\cachedDispatcher;
-use function FastRoute\simpleDispatcher;
 
 final class MgBoot
 {
@@ -68,13 +61,6 @@ final class MgBoot
             return;
         }
 
-        $dispatcher = self::buildRouteDispatcher($routeRules);
-
-        if (!($dispatcher instanceof Dispatcher)) {
-            $response->withPayload(HttpError::create(400))->send();
-            return;
-        }
-
         $httpMethod = strtoupper($request->getMethod());
         $uri = $request->getRequestUrl();
 
@@ -82,156 +68,29 @@ final class MgBoot
             $uri = substr($uri, 0, strpos($uri, '?'));
         }
 
-        $uri = rawurldecode($uri);
+        $uri = StringUtils::ensureLeft(rawurldecode($uri), '/');
+        list($errorCode, $handlerFunc, $pathVariables) = self::dispatch($httpMethod, $uri, $routeRules);
 
-        try {
-            list($resultCode, $handlerFunc, $pathVariables) = $dispatcher->dispatch($httpMethod, $uri);
-
-            switch ($resultCode) {
-                case Dispatcher::NOT_FOUND:
-                    if (AppConf::getEnv() === 'dev' && !AppConf::getBoolean('logging.disable-mgboot-debug-log')) {
-                        $msg = "$httpMethod $uri, 404 not found";
-                        Log::info($msg);
-                    }
-
-                    $response->withPayload(HttpError::create(404))->send();
-                    break;
-                case Dispatcher::METHOD_NOT_ALLOWED:
-                    $response->withPayload(HttpError::create(405))->send();
-                    break;
-                case Dispatcher::FOUND:
-                    if (!is_string($handlerFunc) || $handlerFunc === '') {
-                        $response->withPayload(HttpError::create(400))->send();
-                        return;
-                    }
-
-                    if (!self::setRouteRuleToRequest($request, $httpMethod, $handlerFunc, $routeRules)) {
-                        $response->withPayload(HttpError::create(400))->send();
-                        return;
-                    }
-
-                    if (is_array($pathVariables) && !empty($pathVariables)) {
-                        $request->withPathVariables($pathVariables);
-                    }
-
-                    RequestHandler::create($request, $response)->handleRequest(self::$middlewares);
-                    break;
-                default:
-                    $response->withPayload(HttpError::create(400))->send();
-                    break;
-            }
-        } catch (Throwable $ex) {
-            $response->withPayload($ex)->send();
-        }
-    }
-
-    private static function buildRouteDispatcher(array $routeRules): ?Dispatcher
-    {
-        if (empty($routeRules)) {
-            return null;
+        if (is_int($errorCode) && $errorCode >= 400) {
+            $response->withPayload(HttpError::create($errorCode))->send();
+            return;
         }
 
-        $cacheEnabled = true;
-        $cacheDir = FileUtils::getRealpath('classpath:cache');
-
-        if ($cacheDir !== '') {
-            $cacheDir = rtrim(str_replace("\\", '/', $cacheDir), '/');
+        if (!is_string($handlerFunc) || $handlerFunc === '') {
+            $response->withPayload(HttpError::create(400))->send();
+            return;
         }
 
-        if (AppConf::getEnv() === 'dev' && !AppConf::getBoolean('app.force-dispatcher-cache')) {
-            $cacheEnabled = false;
-        } else if ($cacheDir === '' || !is_dir($cacheDir) || !is_writable($cacheDir)) {
-            $cacheEnabled = false;
+        if (!self::setRouteRuleToRequest($request, $httpMethod, $handlerFunc, $routeRules)) {
+            $response->withPayload(HttpError::create(400))->send();
+            return;
         }
 
-        if (!$cacheEnabled) {
-            simpleDispatcher(function (RouteCollector $r) use ($routeRules) {
-                /* @var RouteRule $rule */
-                foreach ($routeRules as $rule) {
-                    switch ($rule->getHttpMethod()) {
-                        case 'GET':
-                            if (AppConf::getEnv() === 'dev' && !AppConf::getBoolean('logging.disable-mgboot-debug-log')) {
-                                $msg = "dispatch rule: GET {$rule->getRequestMapping()}, handler: {$rule->getHandler()}";
-                                Log::debug($msg);
-                            }
-
-                            $r->get($rule->getRequestMapping(), $rule->getHandler());
-                            break;
-                        case 'POST':
-                            if (AppConf::getEnv() === 'dev' && !AppConf::getBoolean('logging.disable-mgboot-debug-log')) {
-                                $msg = "dispatch rule: POST {$rule->getRequestMapping()}, handler: {$rule->getHandler()}";
-                                Log::debug($msg);
-                            }
-
-                            $r->post($rule->getRequestMapping(), $rule->getHandler());
-                            break;
-                        case 'PUT':
-                            if (AppConf::getEnv() === 'dev' && !AppConf::getBoolean('logging.disable-mgboot-debug-log')) {
-                                $msg = "dispatch rule: PUT {$rule->getRequestMapping()}, handler: {$rule->getHandler()}";
-                                Log::debug($msg);
-                            }
-
-                            $r->put($rule->getRequestMapping(), $rule->getHandler());
-                            break;
-                        case 'PATCH':
-                            if (AppConf::getEnv() === 'dev' && !AppConf::getBoolean('logging.disable-mgboot-debug-log')) {
-                                $msg = "dispatch rule: PATCH {$rule->getRequestMapping()}, handler: {$rule->getHandler()}";
-                                Log::debug($msg);
-                            }
-
-                            $r->patch($rule->getRequestMapping(), $rule->getHandler());
-                            break;
-                        case 'DELETE':
-                            if (AppConf::getEnv() === 'dev' && !AppConf::getBoolean('logging.disable-mgboot-debug-log')) {
-                                $msg = "dispatch rule: DELETE {$rule->getRequestMapping()}, handler: {$rule->getHandler()}";
-                                Log::debug($msg);
-                            }
-
-                            $r->delete($rule->getRequestMapping(), $rule->getHandler());
-                            break;
-                        default:
-                            if (AppConf::getEnv() === 'dev' && !AppConf::getBoolean('logging.disable-mgboot-debug-log')) {
-                                $msg = "dispatch rule: GET or POST {$rule->getRequestMapping()}, handler: {$rule->getHandler()}";
-                                Log::debug($msg);
-                            }
-
-                            $r->get($rule->getRequestMapping(), $rule->getHandler());
-                            $r->post($rule->getRequestMapping(), $rule->getHandler());
-                            break;
-                    }
-                }
-            });
+        if (is_array($pathVariables) && !empty($pathVariables)) {
+            $request->withPathVariables($pathVariables);
         }
 
-        $suffix = Swoole::buildGlobalVarKey();
-        $cacheFile = "$cacheDir/fastroute-$suffix.dat";
-
-        return cachedDispatcher(function (RouteCollector $r) use ($routeRules) {
-            /* @var RouteRule $rule */
-            foreach ($routeRules as $rule) {
-                switch ($rule->getHttpMethod()) {
-                    case 'GET':
-                        $r->get($rule->getRequestMapping(), $rule->getHandler());
-                        break;
-                    case 'POST':
-                        $r->post($rule->getRequestMapping(), $rule->getHandler());
-                        break;
-                    case 'PUT':
-                        $r->put($rule->getRequestMapping(), $rule->getHandler());
-                        break;
-                    case 'PATCH':
-                        $r->patch($rule->getRequestMapping(), $rule->getHandler());
-                        break;
-                    case 'DELETE':
-                        $r->delete($rule->getRequestMapping(), $rule->getHandler());
-                        break;
-                    default:
-                        $r->get($rule->getRequestMapping(), $rule->getHandler());
-                        $r->post($rule->getRequestMapping(), $rule->getHandler());
-                        break;
-                }
-            }
-        }, compact('cacheFile'));
+        RequestHandler::create($request, $response)->handleRequest(self::$middlewares);
     }
 
     public static function gzipOutputEnabled(?bool $flag = null): bool
@@ -324,6 +183,65 @@ final class MgBoot
 
         $bean = self::$controllerMap[$key][$clazz];
         return is_object($bean) ? $bean : null;
+    }
+
+    private static function dispatch(string $httpMethod, string $uri, array $routeRules): array
+    {
+        $entries = [];
+
+        /* @var RouteRule $rr */
+        foreach ($routeRules as $rr) {
+            $requestMapping = $rr->getRequestMapping();
+
+            if ($requestMapping === $uri) {
+                $entries[] = [
+                    'httpMethod' => strtoupper($rr->getHttpMethod()),
+                    'handler' => $rr->getHandler()
+                ];
+
+                continue;
+            }
+
+            if ($rr->getRegex() === '') {
+                continue;
+            }
+
+            $pathVariableNames = $rr->getPathVariableNames();
+            $matches = [];
+            preg_match($rr->getRegex(), $uri, $matches, PREG_SET_ORDER);
+
+            if (count($matches) <= count($pathVariableNames)) {
+                continue;
+            }
+
+            $pathVariables = [];
+
+            foreach ($matches as $i => $m) {
+                if ($i < 1) {
+                    continue;
+                }
+
+                $pathVariables[$pathVariableNames[$i - 1]] = $m;
+            }
+
+            $entries[] = [
+                'httpMethod' => strtoupper($rr->getHttpMethod()),
+                'handler' => $rr->getHandler(),
+                'pathVariables' => $pathVariables
+            ];
+        }
+
+        if (empty($entries)) {
+            return [404, null, null];
+        }
+
+        foreach ($entries as $entry) {
+            if ($entry['httpMethod'] === $httpMethod || in_array($entry['httpMethod'], ['*', 'ALL'])) {
+                return [null, $entry['handler'], is_array($entry['pathVariables']) ? $entry['pathVariables'] : []];
+            }
+        }
+
+        return [405, null, null];
     }
 
     private static function checkNecessaryExceptionHandlers(): void

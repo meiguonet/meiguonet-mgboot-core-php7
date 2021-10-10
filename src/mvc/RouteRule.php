@@ -22,6 +22,16 @@ final class RouteRule
     /**
      * @var string
      */
+    private $regex = '';
+
+    /**
+     * @var string[]
+     */
+    private $pathVariableNames = [];
+
+    /**
+     * @var string
+     */
     private $handler = '';
 
     /**
@@ -97,6 +107,38 @@ final class RouteRule
     {
         $this->requestMapping = $requestMapping;
         return $this;
+    }
+
+    /**
+     * @return string
+     */
+    public function getRegex(): string
+    {
+        return $this->regex;
+    }
+
+    /**
+     * @param string $regex
+     */
+    public function setRegex(string $regex): void
+    {
+        $this->regex = $regex;
+    }
+
+    /**
+     * @return string[]
+     */
+    public function getPathVariableNames(): array
+    {
+        return $this->pathVariableNames;
+    }
+
+    /**
+     * @param string[] $pathVariableNames
+     */
+    public function setPathVariableNames(array $pathVariableNames): void
+    {
+        $this->pathVariableNames = $pathVariableNames;
     }
 
     /**
