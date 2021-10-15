@@ -28,16 +28,7 @@ class FileCache implements CacheInterface
     public function get(string $key, $default = null)
     {
         $cacheKey = $this->buildCacheKey($key);
-
-        if (Swoole::inCoroutineMode(true)) {
-            try {
-                $cacheDir = $this->buildCacheDirAsync($cacheKey);
-            } catch (Throwable $ex) {
-                $cacheDir = '';
-            }
-        } else {
-            $cacheDir = $this->buildCacheDir($cacheKey);
-        }
+        $cacheDir = $this->getCacheDir($cacheKey);
 
         if ($cacheDir === '') {
             return $default;
@@ -78,16 +69,7 @@ class FileCache implements CacheInterface
     public function set(string $key, $value, ?int $ttl = null): bool
     {
         $cacheKey = $this->buildCacheKey($key);
-
-        if (Swoole::inCoroutineMode(true)) {
-            try {
-                $cacheDir = $this->buildCacheDirAsync($cacheKey);
-            } catch (Throwable $ex) {
-                $cacheDir = '';
-            }
-        } else {
-            $cacheDir = $this->buildCacheDir($cacheKey);
-        }
+        $cacheDir = $this->getCacheDir($cacheKey);
 
         if ($cacheDir === '') {
             return false;
@@ -123,21 +105,7 @@ class FileCache implements CacheInterface
     public function delete(string $key): bool
     {
         $cacheKey = $this->buildCacheKey($key);
-
-        if (Swoole::inCoroutineMode(true)) {
-            try {
-                $cacheDir = $this->buildCacheDirAsync($cacheKey);
-            } catch (Throwable $ex) {
-                $cacheDir = '';
-            }
-        } else {
-            $cacheDir = $this->buildCacheDir($cacheKey);
-        }
-
-        if ($cacheDir === '') {
-            return false;
-        }
-
+        $cacheDir = $this->getCacheDir($cacheKey, false);
         $cacheFile = $this->getCacheFile($cacheDir, $cacheKey);
         is_file($cacheFile) && unlink($cacheFile);
         return true;
@@ -151,16 +119,7 @@ class FileCache implements CacheInterface
     public function has(string $key): bool
     {
         $cacheKey = $this->buildCacheKey($key);
-
-        if (Swoole::inCoroutineMode(true)) {
-            try {
-                $cacheDir = $this->buildCacheDirAsync($cacheKey);
-            } catch (Throwable $ex) {
-                $cacheDir = '';
-            }
-        } else {
-            $cacheDir = $this->buildCacheDir($cacheKey);
-        }
+        $cacheDir = $this->getCacheDir($cacheKey, false);
 
         if ($cacheDir === '') {
             return false;
@@ -170,7 +129,7 @@ class FileCache implements CacheInterface
         return is_file($cacheFile);
     }
 
-    private function buildCacheDir(string $cacheKey): string
+    private function getCacheDir(string $cacheKey, bool $autoBuild = true): string
     {
         $dir = FileUtils::getRealpath($this->cacheDir);
 
@@ -178,66 +137,54 @@ class FileCache implements CacheInterface
             if (!is_writable($dir)) {
                 return '';
             }
-        } else {
-            mkdir($dir, 0755, true);
+        } else if ($autoBuild) {
+            if (Swoole::inCoroutineMode(true)) {
+                $wg = Swoole::newWaitGroup();
+                $wg->add();
 
-            if (!is_dir($dir)) {
-                return '';
+                Swoole::runInCoroutine(function () use ($dir, $wg) {
+                    Swoole::defer(function () use ($wg) {
+                        $wg->done();
+                    });
+
+                    mkdir($dir, 0644, true);
+                });
+
+                $wg->wait();
+            } else {
+                mkdir($dir, 0644, true);
             }
+        }
+
+        if (!is_dir($dir) || !is_writable($dir)) {
+            return '';
         }
 
         $cacheKey = strtolower(md5($cacheKey));
-        $d1 = substr($cacheKey, 0, 2);
-        $d2 = substr($cacheKey, -2);
-        $dir = "$dir/$d1/$d2";
+        $dir = sprintf('%s/%s/%s', $dir, substr($cacheKey, 0, 2), substr($cacheKey, -2));
 
-        if (!is_dir($dir)) {
-            mkdir($dir, 0755, true);
+        if (!$autoBuild) {
+            return $dir;
+        }
+
+        if (Swoole::inCoroutineMode(true)) {
+            $wg = Swoole::newWaitGroup();
+            $wg->add();
+
+            Swoole::runInCoroutine(function () use ($dir, $wg) {
+                Swoole::defer(function () use ($wg) {
+                    $wg->done();
+                });
+
+                mkdir($dir, 0644, true);
+            });
+
+            $wg->wait();
+        } else {
+            mkdir($dir, 0644, true);
         }
 
         return is_dir($dir) ? $dir : '';
-    }
-
-    private function buildCacheDirAsync(string $cacheKey): string
-    {
-        $wg = Swoole::newWaitGroup();
-        $wg->add();
-        $baseDir = FileUtils::getRealpath($this->cacheDir);
-        $cacheDir = '';
-
-        Swoole::runInCoroutine(function () use ($wg, $baseDir, &$cacheDir, $cacheKey) {
-            Swoole::defer(function () use ($wg) {
-                $wg->done();
-            });
-
-            if (is_dir($baseDir)) {
-                if (!is_writable($baseDir)) {
-                    return;
-                }
-            } else {
-                mkdir($baseDir, 0755, true);
-
-                if (!is_dir($baseDir)) {
-                    return;
-                }
-            }
-
-            $cacheKey = strtolower(md5($cacheKey));
-            $d1 = substr($cacheKey, 0, 2);
-            $d2 = substr($cacheKey, -2);
-            $cacheDir = "$baseDir/$d1/$d2";
-
-            if (!is_dir($cacheDir)) {
-                mkdir($cacheDir, 0755, true);
-            }
-
-            if (is_dir($cacheDir)) {
-                $cacheDir = '';
-            }
-        });
-
-        $wg->wait();
-        return $cacheDir;
     }
 
     private function getCacheFile(string $cacheDir, string $cacheKey): string
