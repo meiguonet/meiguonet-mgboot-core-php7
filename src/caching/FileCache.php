@@ -139,18 +139,16 @@ class FileCache implements CacheInterface
             }
         } else if ($autoBuild) {
             if (Swoole::inCoroutineMode(true)) {
-                $wg = Swoole::newWaitGroup();
+                /** @noinspection PhpFullyQualifiedNameUsageInspection */
+                $wg = new \Swoole\Coroutine\WaitGroup();
                 $wg->add();
 
-                Swoole::runInCoroutine(function () use ($dir, $wg) {
-                    Swoole::defer(function () use ($wg) {
-                        $wg->done();
-                    });
-
+                go(function () use ($dir, $wg) {
                     mkdir($dir, 0644, true);
+                    $wg->done();
                 });
 
-                $wg->wait();
+                $wg->wait(1.0);
             } else {
                 mkdir($dir, 0644, true);
             }
@@ -168,18 +166,16 @@ class FileCache implements CacheInterface
         }
 
         if (Swoole::inCoroutineMode(true)) {
-            $wg = Swoole::newWaitGroup();
+            /** @noinspection PhpFullyQualifiedNameUsageInspection */
+            $wg = new \Swoole\Coroutine\WaitGroup();
             $wg->add();
 
-            Swoole::runInCoroutine(function () use ($dir, $wg) {
-                Swoole::defer(function () use ($wg) {
-                    $wg->done();
-                });
-
+            go(function () use ($dir, $wg) {
                 mkdir($dir, 0644, true);
+                $wg->done();
             });
 
-            $wg->wait();
+            $wg->wait(1.0);
         } else {
             mkdir($dir, 0644, true);
         }
@@ -201,23 +197,22 @@ class FileCache implements CacheInterface
 
     private function readFromFileAsync(string $filepath): string
     {
-        $wg = Swoole::newWaitGroup();
+        /** @noinspection PhpFullyQualifiedNameUsageInspection */
+        $wg = new \Swoole\Coroutine\WaitGroup();
         $wg->add();
         $contents = '';
 
-        Swoole::runInCoroutine(function () use ($wg, $filepath, &$contents) {
-            Swoole::defer(function () use ($wg) {
-                $wg->done();
-            });
-
+        go(function () use ($wg, $filepath, &$contents) {
             $contents = file_get_contents($filepath);
 
             if (!is_string($contents)) {
                 $contents = '';
             }
+
+            $wg->done();
         });
 
-        $wg->wait();
+        $wg->wait(1.0);
         return $contents;
     }
 
@@ -232,21 +227,19 @@ class FileCache implements CacheInterface
 
     private function writeToFileAsync(string $filepath, string $contents): void
     {
-        $wg = Swoole::newWaitGroup();
+        /** @noinspection PhpFullyQualifiedNameUsageInspection */
+        $wg = new \Swoole\Coroutine\WaitGroup();
         $wg->add();
 
-        Swoole::runInCoroutine(function () use ($wg, $filepath, $contents) {
-            Swoole::defer(function () use ($wg) {
-                $wg->done();
-            });
-
+        go(function () use ($wg, $filepath, $contents) {
             $fp = fopen($filepath, 'w');
             flock($fp, LOCK_EX);
             fwrite($fp, $contents);
             flock($fp, LOCK_UN);
             fclose($fp);
+            $wg->done();
         });
 
-        $wg->wait();
+        $wg->wait(1.0);
     }
 }

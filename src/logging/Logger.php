@@ -382,33 +382,20 @@ final class Logger implements LoggerInterface
             return;
         }
 
-        $wg = Swoole::newWaitGroup();
+        /** @noinspection PhpFullyQualifiedNameUsageInspection */
+        $wg = new \Swoole\Coroutine\WaitGroup();
         $wg->add(2);
 
-        Swoole::runInCoroutine(function () use ($wg, $logTime, $level, $msg) {
-            Swoole::defer(function () use ($wg) {
-                $wg->done();
-            });
-
+        go(function () use ($wg, $logTime, $level, $msg) {
             $this->writeToFile($logTime, $level, $msg);
+            $wg->done();
         });
 
-        Swoole::runInCoroutine(function () use ($wg, $logTime, $level, $msg) {
-            Swoole::defer(function () use ($wg) {
-                $wg->done();
-            });
-
-            $this->writeToFile($logTime, $level, $msg);
-        });
-
-        Swoole::runInCoroutine(function () use ($wg, $logTime, $level, $msg) {
-            Swoole::defer(function () use ($wg) {
-                $wg->done();
-            });
-
+        go(function () use ($wg, $logTime, $level, $msg) {
             $this->writeToAlysls($logTime, $level, $msg);
+            $wg->done();
         });
 
-        $wg->wait();
+        $wg->wait(2.0);
     }
 }
