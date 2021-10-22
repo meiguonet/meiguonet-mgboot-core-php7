@@ -1,6 +1,6 @@
 {
   "name": "meiguonet/meiguonet-mgboot-core-php7",
-  "description": "a lightweight api framework like spring boot for php 7.2.0 or above",
+  "description": "a lightweight api framework like spring boot for php 7.3.0 or above",
   "keywords": [],
   "license": "MIT",
   "authors": [
@@ -15,10 +15,10 @@
     }
   },
   "require": {
-    "php": ">=7.2.0",
+    "php": ">=7.3.0",
     "psr/log": "^1.1.4",
-    "meiguonet/meiguonet-mgboot-common": "^1.0.7",
-    "meiguonet/meiguonet-mgboot-dal": "^1.0.7",
-    "guzzlehttp/guzzle": "^6.5.5"
+    "meiguonet/meiguonet-mgboot-common": "^1.0.0",
+    "meiguonet/meiguonet-mgboot-dal": "^1.0.0",
+    "guzzlehttp/guzzle": "^7.4.0"
   }
 }
