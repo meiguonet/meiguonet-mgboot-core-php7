@@ -9,7 +9,6 @@ use mgboot\exception\AccessTokenInvalidException;
 use mgboot\exception\RequireAccessTokenException;
 use mgboot\mvc\RoutingContext;
 use mgboot\security\JwtSettings;
-use mgboot\security\SecurityContext;
 
 class JwtAuthMiddleware implements Middleware
 {
@@ -45,7 +44,7 @@ class JwtAuthMiddleware implements Middleware
             return;
         }
 
-        $settings = SecurityContext::getJwtSettings($key);
+        $settings = JwtSettings::loadCurrent($key);
 
         if (!($settings instanceof JwtSettings) || $settings->getIssuer() === '') {
             return;

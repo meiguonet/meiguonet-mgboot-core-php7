@@ -3,12 +3,18 @@
 namespace mgboot\security;
 
 use mgboot\common\Cast;
+use mgboot\common\swoole\Swoole;
 use mgboot\common\util\FileUtils;
 use mgboot\common\util\StringUtils;
 use Throwable;
 
 final class JwtSettings
 {
+    /**
+     * @var array
+     */
+    private static $map1 = [];
+
     /**
      * @var string
      */
@@ -108,6 +114,37 @@ final class JwtSettings
     public static function create(string $key, array $settings): self
     {
         return new self($key, $settings);
+    }
+
+    public static function withSettings(JwtSettings $settings, ?int $workerId = null): void
+    {
+        if (Swoole::inCoroutineMode(true)) {
+            if (!is_int($workerId)) {
+                $workerId = Swoole::getWorkerId();
+            }
+
+            $key = "{$settings->getKey()}Worker$workerId";
+        } else {
+            $key = "{$settings->getKey()}Noworker";
+        }
+
+        self::$map1[$key] = $settings;
+    }
+
+    public static function loadCurrent(string $settingsKey, ?int $workerId = null): ?JwtSettings
+    {
+        if (Swoole::inCoroutineMode(true)) {
+            if (!is_int($workerId)) {
+                $workerId = Swoole::getWorkerId();
+            }
+
+            $key = "{$settingsKey}Worker$workerId";
+        } else {
+            $key = "{$settingsKey}Noworker";
+        }
+
+        $settings = self::$map1[$key];
+        return $settings instanceof JwtSettings ? $settings : null;
     }
 
     /**

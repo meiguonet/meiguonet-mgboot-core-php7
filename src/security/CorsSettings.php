@@ -3,12 +3,18 @@
 namespace mgboot\security;
 
 use mgboot\common\Cast;
+use mgboot\common\swoole\Swoole;
 use mgboot\common\util\ArrayUtils;
 use mgboot\common\util\StringUtils;
 use Throwable;
 
 final class CorsSettings
 {
+    /**
+     * @var array
+     */
+    private static $map1 = [];
+
     /**
      * @var bool
      */
@@ -125,6 +131,37 @@ final class CorsSettings
     public static function create(?array $settings = null): self
     {
         return new self($settings);
+    }
+
+    public static function withSettings(CorsSettings $settings, ?int $workerId = null): void
+    {
+        if (Swoole::inCoroutineMode(true)) {
+            if (!is_int($workerId)) {
+                $workerId = Swoole::getWorkerId();
+            }
+
+            $key = "worker$workerId";
+        } else {
+            $key = 'noworker';
+        }
+
+        self::$map1[$key] = $settings;
+    }
+
+    public static function loadCurrent(?int $workerId = null): ?CorsSettings
+    {
+        if (Swoole::inCoroutineMode(true)) {
+            if (!is_int($workerId)) {
+                $workerId = Swoole::getWorkerId();
+            }
+
+            $key = "worker$workerId";
+        } else {
+            $key = 'noworker';
+        }
+
+        $settings = self::$map1[$key];
+        return $settings instanceof CorsSettings ? $settings : null;
     }
 
     /**

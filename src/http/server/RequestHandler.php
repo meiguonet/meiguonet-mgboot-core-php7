@@ -43,6 +43,7 @@ final class RequestHandler
      */
     public function handleRequest(array $middlewares = []): void
     {
+        MgBoot::withControllers();
         $request = $this->request;
         $stages = [];
 
