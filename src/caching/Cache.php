@@ -24,9 +24,9 @@ final class Cache
                 $workerId = Swoole::getWorkerId();
             }
 
-            $key = "cacheKeyPrefixWorker$workerId";
+            $key = "cacheKeyPrefix_worker$workerId";
         } else {
-            $key = 'cacheKeyPrefixNoworker';
+            $key = 'cacheKeyPrefix_noworker';
         }
 
         if (is_string($prefix)) {
@@ -112,9 +112,9 @@ final class Cache
                 $workerId = Swoole::getWorkerId();
             }
 
-            $key = "defaultStoreWorker$workerId";
+            $key = "defaultStore_worker$workerId";
         } else {
-            $key = 'defaultStoreNoworker';
+            $key = 'defaultStore_noworker';
         }
 
         if (is_string($name)) {

@@ -40,9 +40,9 @@ final class MgBoot
                 $workerId = Swoole::getWorkerId();
             }
 
-            $key = "gzipOutputEnabledWorker$workerId";
+            $key = "gzipOutputEnabled_worker$workerId";
         } else {
-            $key = 'gzipOutputEnabledNoworker';
+            $key = 'gzipOutputEnabled_noworker';
         }
 
         if (is_bool($flag)) {
@@ -62,9 +62,14 @@ final class MgBoot
                 $workerId = Swoole::getWorkerId();
             }
 
-            $key = "exceptionHandlersWorker$workerId";
+            $key = "exceptionHandlers_worker$workerId";
         } else {
-            $key = 'exceptionHandlersNoworker';
+            $key = 'exceptionHandlers_noworker';
+        }
+
+        if (!is_array(self::$map1[$key])) {
+            self::$map1[$key] = [$handler];
+            return;
         }
 
         $idx = -1;
@@ -95,12 +100,16 @@ final class MgBoot
                 $workerId = Swoole::getWorkerId();
             }
 
-            $key = "middlewaresWorker$workerId";
+            $key = "middlewares_worker$workerId";
         } else {
-            $key = 'middlewaresNoworker';
+            $key = 'middlewares_noworker';
         }
 
-        self::$map1[$key][] = $middleware;
+        if (!is_array(self::$map1[$key])) {
+            self::$map1[$key] = [$middleware];
+        } else {
+            self::$map1[$key][] = $middleware;
+        }
     }
 
     public static function handleRequest(Request $request, Response $response, array $routeRules): void
@@ -159,7 +168,7 @@ final class MgBoot
             $workerId = Swoole::getWorkerId();
         }
 
-        $key = "controllersWorker$workerId";
+        $key = "controllers_worker$workerId";
 
         if (isset(self::$map1[$key])) {
             return;
@@ -198,7 +207,7 @@ final class MgBoot
                 $workerId = Swoole::getWorkerId();
             }
 
-            $key = "controllersWorker$workerId";
+            $key = "controllers_worker$workerId";
             return self::$map1[$key][$clazz];
         }
 
@@ -218,9 +227,9 @@ final class MgBoot
                 $workerId = Swoole::getWorkerId();
             }
 
-            $key = "exceptionHandlersWorker$workerId";
+            $key = "exceptionHandlers_worker$workerId";
         } else {
-            $key = 'exceptionHandlersNoworker';
+            $key = 'exceptionHandlers_noworker';
         }
 
         $handlers = self::$map1[$key] ?? [];
@@ -257,9 +266,9 @@ final class MgBoot
                 $workerId = Swoole::getWorkerId();
             }
 
-            $key = "middlewaresWorker$workerId";
+            $key = "middlewares_worker$workerId";
         } else {
-            $key = 'middlewaresNoworker';
+            $key = 'middlewares_noworker';
         }
 
         if (isset(self::$map1[$key])) {
@@ -291,9 +300,9 @@ final class MgBoot
                 $workerId = Swoole::getWorkerId();
             }
 
-            $key = "exceptionHandlersWorker$workerId";
+            $key = "exceptionHandlers_worker$workerId";
         } else {
-            $key = 'exceptionHandlersNoworker';
+            $key = 'exceptionHandlers_noworker';
         }
 
         $handlers = self::$map1[$key];
@@ -404,9 +413,9 @@ final class MgBoot
                 $workerId = Swoole::getWorkerId();
             }
 
-            $key = "middlewaresWorker$workerId";
+            $key = "middlewares_worker$workerId";
         } else {
-            $key = 'middlewaresNoworker';
+            $key = 'middlewares_noworker';
         }
 
         $handlers = self::$map1[$key];
