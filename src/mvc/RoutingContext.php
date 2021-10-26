@@ -95,7 +95,7 @@ final class RoutingContext
 
         if (Swoole::inCoroutineMode(true)) {
             $workerId = Swoole::getWorkerId();
-            $key = "routeRulesWorker$workerId";
+            $key = "routeRules_worker$workerId";
             self::$map1[$key] = $rules;
             return;
         }
@@ -123,7 +123,7 @@ final class RoutingContext
                 $workerId = Swoole::getWorkerId();
             }
 
-            $key = "routeRulesWorker$workerId";
+            $key = "routeRules_worker$workerId";
             $rules = self::$map1[$key];
             return is_array($rules) ? $rules : [];
         }

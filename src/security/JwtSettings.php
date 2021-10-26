@@ -123,9 +123,9 @@ final class JwtSettings
                 $workerId = Swoole::getWorkerId();
             }
 
-            $key = "{$settings->getKey()}Worker$workerId";
+            $key = "{$settings->getKey()}_worker$workerId";
         } else {
-            $key = "{$settings->getKey()}Noworker";
+            $key = "{$settings->getKey()}_noworker";
         }
 
         self::$map1[$key] = $settings;
@@ -138,9 +138,9 @@ final class JwtSettings
                 $workerId = Swoole::getWorkerId();
             }
 
-            $key = "{$settingsKey}Worker$workerId";
+            $key = "{$settingsKey}_worker$workerId";
         } else {
-            $key = "{$settingsKey}Noworker";
+            $key = "{$settingsKey}_noworker";
         }
 
         $settings = self::$map1[$key];
