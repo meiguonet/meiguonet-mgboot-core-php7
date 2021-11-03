@@ -70,53 +70,95 @@ final class RoutingContext
 
     /**
      * @param string|null $scanControllersIn
-     * @param string $cacheDir
+     * @param string|null $cacheDir
+     * @param int|null $workerId
+     * @return RouteRule[]
      */
-    public static function buildRouteRules(?string $scanControllersIn = null, string $cacheDir = ''): void
+    public static function buildRouteRules(
+        ?string $scanControllersIn = null,
+        ?string $cacheDir = null,
+        ?int $workerId = null
+    ): array
     {
-        $inDevMode = AppConf::getEnv() === 'dev';
-        $forceCache = AppConf::getBoolean('app.forceRouteRulesCache');
-
-        if ($inDevMode && !$forceCache) {
-            return;
-        }
-
         if (is_string($scanControllersIn) && $scanControllersIn !== '') {
             $dir = FileUtils::getRealpath($scanControllersIn);
         } else {
-            $dir = FileUtils::getRealpath('classpath:controller');
+            $dir = FileUtils::getRealpath('classpath:app/controller');
+        }
+
+        if (Swoole::inCoroutineMode(true)) {
+            if (!is_int($workerId)) {
+                $workerId = Swoole::getWorkerId();
+            }
+
+            $key = "routeRules_worker$workerId";
+            $rules = self::$map1[$key];
+
+            if (is_array($rules) && !empty($rules)) {
+                return $rules;
+            }
+
+            $rules = self::buildRouteRulesInternal($dir);
+            self::$map1[$key] = $rules;
+            return $rules;
+        }
+
+        $forceCache = AppConf::getEnv() !== 'dev' || AppConf::getBoolean('app.forceRouteRulesCache');
+
+        if (!$forceCache) {
+            return self::buildRouteRulesInternal($dir);
+        }
+
+        if (is_string($cacheDir) && $cacheDir !== '') {
+            $cacheDir = FileUtils::getRealpath($cacheDir);
+        } else {
+            $cacheDir = FileUtils::getRealpath('classpath:cache');
+        }
+
+        $cacheFile = "$cacheDir/route_routes.php";
+
+        if (is_file($cacheFile)) {
+            try {
+                $entries = include($cacheFile);
+            } catch (Throwable $ex) {
+                $entries = [];
+            }
+
+            if (is_array($entries) && !empty($entries)) {
+                return array_map(function ($entry) {
+                    if (is_array($entry['handlerFuncArgs']) && !empty($entry['handlerFuncArgs'])) {
+                        $entry['handlerFuncArgs'] = array_map(function ($argInfo) {
+                            return HandlerFuncArgInfo::create($argInfo);
+                        }, $entry['handlerFuncArgs']);
+                    } else {
+                        $entry['handlerFuncArgs'] = [];
+                    }
+
+                    return RouteRule::create($entry);
+                }, $entries);
+            }
         }
 
         $rules = self::buildRouteRulesInternal($dir);
 
-        if (empty($rules)) {
-            return;
+        if (!empty($rules)) {
+            self::writeRouteRulesToCacheFile($cacheDir, $rules);
         }
 
-        if (Swoole::inCoroutineMode(true)) {
-            $workerId = Swoole::getWorkerId();
-            $key = "routeRules_worker$workerId";
-            self::$map1[$key] = $rules;
-            return;
-        }
-
-        if ($cacheDir === '') {
-            $cacheDir = FileUtils::getRealpath('classpath:cache');
-        } else {
-            $cacheDir = FileUtils::getRealpath($cacheDir);
-        }
-
-        $cacheFile = "$cacheDir/route_routes.php";
-        self::writeRouteRulesToCacheFile($cacheFile, $rules);
+        return $rules;
     }
 
     /**
      * @param string|null $scanControllersIn
-     * @param string $cacheDir
+     * @param string|null $cacheDir
      * @param int|null $workerId
      * @return RouteRule[]
      */
-    public static function getRouteRules(?string $scanControllersIn = null, string $cacheDir = '', ?int $workerId = null): array
+    public static function getRouteRules(
+        ?string $scanControllersIn = null,
+        ?string $cacheDir = null,
+        ?int $workerId = null
+    ): array
     {
         if (Swoole::inCoroutineMode(true)) {
             if (!is_int($workerId) || $workerId < 0) {
@@ -128,45 +170,7 @@ final class RoutingContext
             return is_array($rules) ? $rules : [];
         }
 
-        $inDevMode = AppConf::getEnv() === 'dev';
-        $forceCache = AppConf::getBoolean('app.forceRouteRulesCache');
-
-        if ($inDevMode && !$forceCache) {
-            if (is_string($scanControllersIn) && $scanControllersIn !== '') {
-                $dir = FileUtils::getRealpath($scanControllersIn);
-            } else {
-                $dir = FileUtils::getRealpath('classpath:controller');
-            }
-
-            return self::buildRouteRulesInternal($dir);
-        }
-
-        if ($cacheDir === '') {
-            $cacheDir = FileUtils::getRealpath('classpath:cache');
-        } else {
-            $cacheDir = FileUtils::getRealpath($cacheDir);
-        }
-
-        $cacheFile = "$cacheDir/route_routes.php";
-        $rules = [];
-
-        if (is_file($cacheFile)) {
-            try {
-                $rules = include($rules);
-            } catch (Throwable $ex) {
-                $rules = [];
-            }
-        }
-
-        return array_map(function ($rr) {
-            $funcArgs = is_array($rr['handlerFuncArgs']) ? $rr['handlerFuncArgs'] : [];
-
-            $rr['handlerFuncArgs'] = array_map(function ($info) {
-                return HandlerFuncArgInfo::create($info);
-            }, $funcArgs);
-
-            return RouteRule::create($rr);
-        }, $rules);
+        return self::buildRouteRules($scanControllersIn, $cacheDir);
     }
 
     public function next(?bool $arg0 = null): bool
@@ -596,27 +600,18 @@ final class RoutingContext
         return compact('extraAnnotations');
     }
 
-    private static function writeRouteRulesToCacheFile(string $cacheFile, array $rules): void
+    private static function writeRouteRulesToCacheFile(string $cacheDir, array $rules): void
     {
-        if (empty($rules)) {
+        if (!is_dir($cacheDir)) {
+            mkdir($cacheDir, 0644, true);
+        }
+
+        if (!is_dir($cacheDir) || !is_writable($cacheDir)) {
             return;
         }
 
-        $dir = dirname($cacheFile);
-
-        if (!is_string($dir) || $dir === '') {
-            return;
-        }
-
-        if (!is_dir($dir)) {
-            mkdir($dir, 0644, true);
-        }
-
-        if (!is_dir($dir) || !is_writable($dir)) {
-            return;
-        }
-
-        $fp = fopen("$dir/route_rules.php", 'w');
+        $cacheFile = "$cacheDir/route_routes.php";
+        $fp = fopen($cacheFile, 'w');
 
         if (!is_resource($fp)) {
             return;
@@ -628,8 +623,8 @@ final class RoutingContext
         foreach ($rules as $rule) {
             $entry = $rule->toMap();
 
-            $entry['handlerFuncArgs'] = array_map(function (HandlerFuncArgInfo $info) {
-                return $info->toMap();
+            $entry['handlerFuncArgs'] = array_map(function (HandlerFuncArgInfo $argInfo) {
+                return $argInfo->toMap();
             }, $rule->getHandlerFuncArgs());
 
             $entries[] = $entry;
