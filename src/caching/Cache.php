@@ -2,6 +2,7 @@
 
 namespace mgboot\caching;
 
+use mgboot\common\AppConf;
 use mgboot\common\swoole\Swoole;
 use mgboot\common\util\FileUtils;
 use mgboot\common\util\StringUtils;
@@ -35,7 +36,12 @@ final class Cache
         }
 
         $s1 = self::$map1[$key];
-        return is_string($s1) ? $s1 : '';
+
+        if (!is_string($s1) || $s1 === '') {
+            return AppConf::getEnv();
+        }
+
+        return StringUtils::ensureRight($s1, '.') . AppConf::getEnv();
     }
 
     public static function buildCacheKey(string $cacheKey): string
@@ -43,7 +49,7 @@ final class Cache
         $prefix = rtrim(self::cacheKeyPrefix(), '.');
 
         if (empty($prefix)) {
-            return $cacheKey;
+            $prefix = AppConf::getEnv();
         }
 
         return $prefix . StringUtils::ensureLeft($cacheKey, '.');
